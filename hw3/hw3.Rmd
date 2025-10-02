@@ -1,0 +1,339 @@
+---
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+```{r}
+rm(list = ls())
+setwd("C:/Users/USER/Downloads")  # set directory
+
+library(MASS)
+library(quantreg)
+
+# Q1(1)
+hillsData <- read.table("hills.csv",sep=',',header=TRUE)
+attach(hillsData)
+head(hillsData)
+
+# time against climb
+par(mfrow=c(1,1))
+tc.LSM <- lm(time~climb)
+plot(climb, time, main = "time against climb")
+abline(tc.LSM)
+
+# raw residuals and normal qq plots
+plot(studres(tc.LSM),type="l",main="Studentized Residuals")
+qqnorm(studres(tc.LSM),main="Q-Q Plot of Studentized Residuals")
+qqline(studres(tc.LSM))
+
+# comment
+# From the graph, we can see the residuals of time against climb are not 
+# normally distributed. It seems like there's a heavy tail for the right tail of
+# the residuals distribution, that's the upper tail distribution of the residuals
+# is heavier than that of the normal distribution. For the lower tail distribution
+# of the residuals distribution, it seems that the deviations from the straight 
+# line are minimal that the lower tail of the residual distribuion tends to be 
+# normally distributed.
+
+# summary 
+summary(tc.LSM)
+summary(tc.LSM)$r.squared # the r-squared
+
+# check whether the predictors are statistically significant at 5% significance leve
+# The predictor of intercept with t-value 1.647<1.96 and p-value 0.109>0.05 is not
+# statistically significant at 5% significance level while the predictor of climb with 
+# t-value 7.801>1.96 and p-value smaller than 0.05 is statistically significant 
+# at 5% significance leve
+
+# time against dist
+par(mfrow=c(1,1))
+td.LSM <- lm(time~dist)
+plot(dist, time, main = "time against dist")
+abline(td.LSM)
+
+# raw residuals and normal qq plots
+plot(studres(td.LSM),type="l",main="Studentized Residuals")
+qqnorm(studres(td.LSM),main="Q-Q Plot of Studentized Residuals")
+qqline(studres(td.LSM))
+
+# comment
+# From the graph, we can see that the points are drifting upwards in the upper tail,
+# which means that the upper tail of the residual distibution is heavier that that of
+# the normal distribution. We can also see that there's a trend of points drifting 
+# downwards in the lower tail, which means that the lower tail of the residual 
+# distribution is also heavier than that of the normal distribution.
+
+# summary 
+summary(td.LSM)
+summary(td.LSM)$r.squared # the r-squared
+
+# check whether the predictors are statistically significant at 5% significance level
+# The predictor of intercept with t-value -0.841<1.96 and p-value 0.406>0.05 is not
+# statistically significant at 5% significance level while the predictor of dist 
+# with t-value 13.446>1.96 and p-value < 0.05 is statistically significant at 5%
+# significance level
+
+c(summary(tc.LSM)$r.squared, summary(td.LSM)$r.squared)
+# This means the proportion of variation for time against distance explained by 
+# the linear LS model is higher than that for time against climb as the R-squared
+# for the model of time against distance is higher than that of the model of time
+# against climb. The linear LS model is more suitable for time against distance.
+```
+```{r}
+# Q1(2)
+# time against climb
+tc.LAD = rq(time~climb, 0.5)
+plot(climb, time, main = "time against climb")
+abline(tc.LAD)
+
+# residuals and qq plot
+plot(tc.LAD$residuals,type="l",main="Residuals")
+qqnorm(tc.LAD$residuals,main="Q-Q Plot of Residuals")
+qqline(tc.LAD$residuals)
+
+# comment
+# From the graph, we can see that the points on the upper tail are drifting upwards
+# while the points on the lower tail are drifting upwards as well. So the upper 
+# tail of the residual distribution is heavier than that of the normal distribution
+# while the lower tail of the residual distribution is lighter than that of the 
+# normal distribution. Therefore, the residuals of time against climb are not 
+# normally distributed.
+
+# analog of r-squared
+tc_time.hat = tc.LAD$coefficients[1]+tc.LAD$coefficients[2]*climb
+tc_time.bar = mean(time) 
+tc_sse = sum((time-tc_time.hat)^2)
+tc_total_variation = sum((time-tc_time.bar)^2)
+
+1-(tc_sse/tc_total_variation) # the analog r-squared for tc.LAD
+
+# summary
+summary(tc.LAD)
+
+# time against distance
+td.LAD = rq(time~dist, 0.5)
+plot(dist, time, main = "time against distance")
+abline(td.LAD)
+
+# residuals and qq plot
+plot(td.LAD$residuals,type="l",main="Residuals")
+qqnorm(td.LAD$residuals,main="Q-Q Plot of Residuals")
+qqline(td.LAD$residuals)
+
+# comment
+# From the graph, we can see that the points on the upper tail are drifting upwards
+# so the upper tail of the residual distrition is heavier than that of the normal
+# distribution. While for the lower tail, i think that the deviation from the 
+# straight line is minimal so the lower tail of the residual distribution tends 
+# to be similar to that of the normal distribution.
+
+# analog of r-squared
+td_time.hat = td.LAD$coefficients[1]+td.LAD$coefficients[2]*dist
+td_time.bar = mean(time) 
+td_sse = sum((time-td_time.hat)^2)
+td_total_variation = sum((time-td_time.bar)^2)
+
+1-(td_sse/td_total_variation) # the analog r-squared for tc.LAD
+
+# summary
+summary(td.LAD)
+
+c(1-(tc_sse/tc_total_variation), 1-(td_sse/td_total_variation))
+# This means the proportion of variation for time against distance explained by 
+# the LAD model is higher than that for time against climb as the analog R-squared
+# for the model of time against distance is higher than that of the model of time
+# against climb. The LAD model is more suitable for time against distance.
+
+# Comparison
+c(summary(tc.LSM)$r.squared, summary(td.LSM)$r.squared)
+c(1-(tc_sse/tc_total_variation), 1-(td_sse/td_total_variation))
+# Looking at the results(summaries + r-squared) from the 2 models, we can see 
+# that distance is better factor than climb by focusing on the r-squared. Also, 
+# by look at the r-squared, we may conclude that LS model performs better than 
+# LAD model so it'll be better to use the LS model. In addition, the intercept 
+# tends to be not statistically significant at 5/10% significance level
+```
+```{r}
+# 1(3)
+dist_given = 26.2
+predi2<-td.LSM$coef[1]+td.LSM$coef[2]*dist_given
+predi1<-td.LAD$coef[1]+td.LAD$coef[2]*dist_given
+predis<-round(c(predi2,predi1),0)
+names(predis)<-c("LS", "LAD")
+predis  # the predictions
+
+# 1(4)
+Thills = hillsData
+names(Thills) = c("X", "Tdist", "climb", "Ttime")
+Thills["Ttime"][Thills["X"] == "Lairig Ghru"] = 92.667
+Thills
+
+# time against distance for LSM
+par(mfrow=c(1,2))
+plot(dist, time, main = "time against dist(LSM)")
+abline(td.LSM)
+
+td.LSM_new <- lm(Thills$Ttime~Thills$Tdist)
+abline(td.LSM_new, col = "red") # the LSM for the new data set
+
+# time against distance for LAD
+plot(dist, time, main = "time against dist(LAD)")
+abline(td.LAD)
+
+td.LAD_new = rq(Thills$Ttime~Thills$Tdist, 0.5)
+abline(td.LAD_new, col = "red") # the LAD for the new data set
+
+summary(td.LSM_new)
+summary(td.LAD_new)
+
+# the LSM changes greatly while the LAD model doesn't change when there's a 
+# decrease in  the decrease in one of the time record. The changes in regression 
+# coefficients of LSM reflect that as well when we compare them with those of the 
+# LAD model. There are significant percentage change in the intercept and distance
+# in the LSM while there is no change in those in LAD when there's just a little 
+# change in the data. This happens because the LSM is plotted based on the mean 
+# of the data while the LAD is plotted based on the median of the data. 
+# Therefore, LAD is not affected by the change in the value of the data while
+# the LSM is greatly affect by that.
+```
+```{r}
+# Q1(5)
+# multiple regression
+tdc.LSM = lm(time~dist+climb)
+
+summary(tdc.LSM)
+# check whether the predictors are statistically significant at 5% significance leve
+# Intercept with t-value <-1.96, p-value <0.05 is statistically significant at 
+# 5% significance level
+# dist with t-value >1.96 and p-value <0.05 is statistically significant at 5% 
+# significance level
+# climb with t-value > 1.96 and p-value<0.05 isstatistically significant at 5% 
+# significance leve
+
+c(summary(tc.LSM)$r.squared, summary(td.LSM)$r.squared, summary(tdc.LSM)$r.squared)
+
+# comparison
+# the r-squared for LSM of time against climb is the lowest as the linear 
+# dependence between them is the lowest.The r-squared for LSM of time against
+# distance is higher than that of the LSM of time against climb as the linear 
+# dependence between time and distance is greater than that of time and climb. 
+# The r-squared for the multiple LSM of time against distance and climb is the 
+# highest as both of the factors have linear dependence with time and they can 
+# all help with the prediction of time and thus the variance explained can be 
+# improved.
+
+# residuals and qq plot
+par(mfrow=c(1,1))
+qqnorm(studres(tdc.LSM), main = "Q-Q Plot of Studentized Residuals")
+qqline(studres(tdc.LSM))
+
+# comparison
+# The qq plot for the residuals of multiple LSM shows that the points on the 
+# upper tail are drifting upwards so this means the upper tail of the residual 
+# distribution is heavier than that of the normal distribution. As the points on 
+# the lower tail are on the straight line and there may just be little deviations
+# from the straight line so we could conclude that the lower tail of the residual
+# distribution is similar to that of the normal distribution.
+# From the qq plots for residuals of time against climb and time against distance
+# , we know that the residual distribution of time against climb has heavy tail 
+# for its upper tail and light tail for its lower tail while the residual 
+# distribution of time against distance only has heavy tail for its upper tail.
+# So when we do multiple LSM, the heavy-tailedness gets mixed and that's why we 
+# still get a heavy tail for the upper tail of the residual distribution but a 
+# lower tail that is similar to that the normal distribution.
+```
+
+```{r}
+# Q2(1)
+GOOG <- read.table("Google.csv",sep=',',header=TRUE)
+attach(GOOG)
+head(GOOG)
+
+ER_GOOG = rGoog - rf
+ER_GOOG.LSM = lm(ER_GOOG~rM_ex)
+
+summary(ER_GOOG.LSM)
+
+# intercept with p-value >0.05 is not statistically significant at 5% 
+# significance level
+# rM_ex with t-value>1.96 and p-value<0.05 is statistically significant at 5% 
+# significance level
+# R-squared = 0.4236 means that 42.36% of the excess return of Google can 
+# be explained by the market excess return
+
+# Q2(2)
+# Q2(2)(i): Yes, as from the F-statistics, we can see that the p-value is very 
+# low and we know the model is significant which indicates the only factor of 
+# this model, the market excess return, is significant in explaining the 
+# variation in the return of GOOG.
+
+# Q2(2)(ii): No, it's not significantly different from 0. As CAPM asserts that 
+# the alpha should be 0 so since the p-value is > 0.05, it means that this 
+# hypothesis should not be rejected.
+
+# Q2(2)(iii): No, it's not significantly different from 1. As if we set the null
+# hypothesis: beta = 1, the t test statistic is (1.002-1)/0.104 = 0.019 < 2 so 
+# we should not reject the null hypothesis and thus beta is not significantly 
+# different from 1.
+
+# Q2(2)(iv):
+library(MASS)
+par(mfrow=c(2,1))
+plot(stdres(ER_GOOG.LSM),type="l",main="Standardized Residuals")
+plot(studres(ER_GOOG.LSM),type="l",main="Studentized Residuals")
+
+n <- length(ER_GOOG) - 1
+plot(stdres(ER_GOOG.LSM)[-n],stdres(ER_GOOG.LSM)[-1],main="Standardized residual against previous one ")
+cor(stdres(ER_GOOG.LSM)[-n],stdres(ER_GOOG.LSM)[-1])
+
+plot(studres(ER_GOOG.LSM)[-n],studres(ER_GOOG.LSM)[-1],main="Studentized residual against previous one ")
+cor(studres(ER_GOOG.LSM)[-n],studres(ER_GOOG.LSM)[-1])
+
+# we cannot find any pattern in the 2 types of residuals which each residual is 
+# independent of each other. Therefore, there's no trend we can see from the above
+# four graphs.
+
+acf(stdres(ER_GOOG.LSM), type = "correlation", plot = TRUE)
+acf(studres(ER_GOOG.LSM), type = "correlation", plot = TRUE)
+
+# Again, as the noise at time t and time t+1 are independent of each other, the 
+# the auto-correlation is 0.
+
+par(mfrow=c(1,2))
+qqnorm(stdres(ER_GOOG.LSM),main="Q-Q Plot of Standardized Residuals")
+abline(0,1,col="red")
+qqnorm(studres(ER_GOOG.LSM),main="Q-Q Plot of Studentized Residuals")
+abline(0,1,col="red")
+
+# As the deviations from the straight line are minimal, both of the residuals 
+# follow normal distribution
+```
+```{r}
+# Q2(3)
+pairs(cbind(ER_GOOG,rM_ex,rSmB,rHmL))
+
+FF3factor <- lm(ER_GOOG ~ rM_ex + rSmB + rHmL)
+summary(FF3factor)
+
+# Q2(4)
+# looking at the F-statistics, we can see that the p-value is very low so that 
+# we can conclude that the model or the three factors as a whole are statistically
+# significant. 
+# rM_ex with p-value <0.05 is statistically significant.
+# rSmB with p-value <0.05 is statistically significant.
+# rHmL with p-value <0.05 is statistically significant.
+
+# Q2(5)
+c(summary(ER_GOOG.LSM)$r.squared, summary(FF3factor)$r.squared)
+# the single factor can explain 42.36% of the variation in the GOOG returns 
+# while the three factors can explain 48.71% of the variation in the GOOG returns
+
+# Q2(6)
+anova(ER_GOOG.LSM,FF3factor)
+# looking at the p-value, as it's very small, we can know that the 3-factor 
+# model does explain statistically significant more variation than the single 
+# factor model. Also, as the difference between the r-squared of the 2 models is 
+# 6.35%, it means that the 3-factor model is around 15% better than the single 
+# factor model.
+```
