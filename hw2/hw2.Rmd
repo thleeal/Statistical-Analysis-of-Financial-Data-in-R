@@ -1,0 +1,213 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+```{r}
+rm(list = ls())
+setwd("C:/Users/USER/Downloads")  # set directory
+
+set.seed(33839)
+###### Fit GPD to DHSI
+library("evir")
+# if the package evir has not been installed, install it by running install.packages("evir") 
+source("gpd_code.R")# package functions in Rsafd, need to save gpd_code.R in the same folder as this file
+# this function uses the package robustbase. If the package has not been installed, install it by running install.packages("robustbase")
+```
+
+```{r}
+# Q1(1)
+HSI <- read.table("DHSI.csv",header = T, sep=",")
+attach(HSI)
+
+DHSI<-(HSI$Close)
+n<-length(DHSI)
+DHSIRET <- diff(DHSI)/DHSI[1:(n-1)] #compute raw returns
+
+is.vector(DHSIRET)
+
+c(mean(DHSIRET),sd(DHSIRET))
+
+# Q1(2)
+SHAPE.XI <- TRUE
+eda.shape(DHSIRET)
+# From the top left graph and the bottom left graph,
+# we can know about the shape of the distribution, 
+# which is a bell shape but is very tall, so it is not a normal distributin. 
+# Also, most of the data are around the centre which is 0.
+# Also, it has small dispersion/variance in general.
+# From the top right graph, we can know that it ranges
+# from around -0.35 to 0.2. The median is 0. 
+# The interquartile range is ranged from some value slightly 
+# below 0 to some value slightly above 0. 
+# There are just a few outliers, which can be ignored. 
+# Most data are ranged between -0.1 and 0.1.
+# From the bottom right graph, we can see that there is an
+# upwards sloping curve above the reference line on the
+# right tail so we determine that the sample distribution has
+# a heavier right tail than the that of the normal distribution.
+# Similarly, by symmetry, we can know that the left tail of the 
+# sample distribution is heavier than that of the normal 
+# distribution as well. 
+# This also means that the sample distribution does not follow a normal distriburion.
+
+# Q1(3)
+par(mfrow=c(1,2))
+shape.plot(DHSIRET,tail="upper")
+shape.plot(DHSIRET,tail="lower")
+
+# Specification of the tails: 
+# First, We don’t want the tail to contain too many observations in the center
+# as we want to get the untypical observation, instead of the typical ones 
+# Second, We want the tail to contain “enough” observations to ensure quality of the fitting
+# Therefore, we don't want the tail to contain just the top 3 % or the bottom 3%
+# Third, We don’t want the specification of “tail” to affect the fitting too much
+# That's we don't the choice of the threshold to affect the value of the estimation of Xi,
+# which means that the estimation of xi within the neighborhood of that choice of Xi should be similar
+# So, considering for the above 3 rules, we will just consider the middle part of the graph, which is not near 0 or 0.03, 
+# and find a region of threshold where their estimates of Xi together show in general a flat line.
+# Therefore, for the right tail, I will take 0.0215 as the threshold as it is in the middle part of
+# the graph and the estimates of Xi of it and its small neighborhood are similar.
+# Then for the left tail, I will take -0.0245 as the threshold as the it is in the middle part of
+# the graph and the estimates of Xi of it and its small neighborhood are similar. 
+
+# fit
+DHSIRET.est <- gpd.tail(DHSIRET, upper=0.0215,lower=-0.0245)
+# As the points of the 2 graphs are essentially on a straight line,
+# the GPD should be an appropriate model to fit the tails as the distribution of
+# the fitted GDP distribution of the 2 tails is respectively quite the same as 
+# the real right tail distribution and the real left tail distribution.
+
+# xi
+DHSIRET.est[[1]]$par.ests[1]     # upper    
+DHSIRET.est[[2]]$par.ests[1]     # lower   
+
+# (Another) checking the goodness of model fitting
+par(mfrow=c(1,2))
+
+tailplot(DHSIRET.est[[1]]) # upper tail
+title("Plot of upper tail in log - log scale")
+tailplot(DHSIRET.est[[2]]) # lower tail
+title("Plot of lower tail in log - log scale")
+
+# From the 2 graphs, we can see that overall, fitted distributions match with empirical distribution very well,
+# even though both tail estimates miss several extreme values.
+# Therefore, for the fitting results, we can say that the GPD fits the 2 tails well
+# as the fitted GPD distribution is quite the same as the real tail distributions,
+# for both cases of the left and the right.
+```
+
+```{r}
+# Q1(4)
+par(mfrow=c(1,1))
+SDHSIRET=gpd.2q(runif(10000), DHSIRET.est)
+qqplot(DHSIRET,SDHSIRET,main = "Q-Q Plot of DHSIRET vs S_DHSIRET")
+abline(a=0,b=1)
+# As points are mostly on the diagonal. The fitting result is very close to the empirical
+# data. Therefore, we can say that the GPD fits the 2 tails well
+# as the fitted GPD distribution is quite the same as the real tail distributions,
+# for both cases of the left and the right.
+
+# Q1(5)
+q<-0.005
+VaR_emp <- - quantile(DHSIRET,q) # using empirical quantile
+VaR_Normal <- - qnorm(q,mean(DHSIRET),sd(DHSIRET)) # assuming that the daily raw return is normally distributed
+VaR_GPD <- - quantile(SDHSIRET,q) # using the Monte Carlo sample S_DHSIRET that you generated from the fitted GPD model
+VaR_Ratio_N_GPD <-  (VaR_Normal - VaR_GPD)/VaR_GPD
+VaR_Ratio_N_emp = (VaR_Normal - VaR_emp)/VaR_emp
+VaR_Ratio_GPD_emp = (VaR_GPD - VaR_emp)/VaR_emp
+round(c(VaR_emp,VaR_Normal,VaR_GPD,VaR_Ratio_N_GPD, VaR_Ratio_N_emp, VaR_Ratio_GPD_emp),3)
+# Differences: VaR under normal assumption is smaller than the VaR under GPD assumption by about 22%. 
+# As the 2 distributions, the normal model and the well-fitted model, do not match.
+# This difference will be huge when the portfolio is large. 
+# Also, it means that the normal model underestimates the loss, which is under GPD assumption.
+# In addition, VaR under normal assumption is smaller than the empirical VaR by about 21%
+# as the empirical distribution does not match with the normal distribution well. The normal model is underfitting the real data.
+# This difference will be huge when the portfolio is large.
+# Also, it means that the normal model underestimates the real/empirical loss.
+# Similarities: Empirical VaR ≈ VaR under the GPD assumptions as the difference between these two is close to 0 
+# because from the above-mentioned, in overall, fitted distributions match with empirical distribution very well.
+
+# Q1(6)
+### empirical ES
+ES_emp <- mean(- DHSIRET[- DHSIRET > VaR_emp]) # using empirical conditional mean
+
+## under normal assumption
+mu_DHSIRET <- mean(DHSIRET)
+sd_DHSIRET <- sd(DHSIRET)
+N<-100000
+X<-rnorm(N,mu_DHSIRET,sd_DHSIRET)
+ES_N <- mean( - X[- X > VaR_Normal]) # the ES assuming that the daily raw return is normally distributed
+
+ES_GPD <- mean(- SDHSIRET[- SDHSIRET > VaR_GPD]) # based on the fitted GPD distribution
+
+round(c(ES_emp, ES_N, ES_GPD),3)
+# Differences: the ES under normal assumption is smaller than the empirical ES 
+# because the normal model is underfitting the real data. The normal model and empirical distribution don't match
+# The normal model underestimes the ES.
+# In additon, the ES under normal assumption is smaller than the ES under GPD assumption as well
+# because the 2 distribution, the normal distribution and the GPD model, don't match
+# and the normal model underestimates the ES, which is under fitted GPD assumption
+# Similarities: The ES under the GPD assumption is quite close to the empirical ES
+# because from the above-mentioned, in overall, fitted distributions match with empirical distribution very well.
+```
+
+```{r}
+# 2(1)
+UTILITIES<-read.csv("UTILITIES.csv")
+X <- UTILITIES[ , 1 ]
+Y <- UTILITIES[ , 2 ]
+
+summary(X)
+summary(Y)
+
+mu <- c(mean(X), mean(Y)) # the means of X and Y 
+mu
+
+sd_X = sd(X) # the standard deviation of X
+sd_Y = sd(Y) # the standard deviation of Y
+sd_X
+sd_Y
+
+cor(cbind(X,Y))
+# from the matrix, we can see that the correlation coefficient for X and X is 1
+# while the correlation coefficient for Y and Y is 1 as well
+rho_XY = cor(X,Y) # the correlation coefficient for X and Y, which matches with the number in the matrix
+rho_XY
+
+cov_XY <- cov(X,Y)
+var_X <- var(X)
+var_Y <- var(Y)
+c(cov_XY/sqrt(var_X*var_Y), rho_XY) # again the two numbers match with each other
+
+# 2(2)
+# the 2-percentiles of the variable X + Y under jointly Gaussian distribution
+qnorm(0.02, mean = mean(X)+mean(Y), sd = sqrt(var(X)+var(Y)+2*cov(X,Y)))
+
+# the 2-percentiles of the variables X - Y under jointly Gaussian distribution
+qnorm(0.02, mean = mean(X)-mean(Y), sd = sqrt(var(X)+var(Y)+2*(1)*(-1)*cov(X,Y)))
+
+# the empirical estimate of of 2-percentiles of the variable X + Y
+quantile(X+Y, 0.02)
+
+# the empirical estimate of of 2-percentiles of the variable X - Y
+quantile(X-Y, 0.02)
+```
+
+```{r}
+# Q3(1)
+n = 1024
+X = rnorm(n)
+Y = X^2
+par(mfrow=c(1,1))
+plot(X,Y) 
+cor(X,Y) # the sample correlation̂ρ(X, Y )
+
+# Q3(2)
+XX = rnorm(n, 3, 1)
+YY = XX^2
+par(mfrow=c(1,1))
+plot(XX,YY) 
+cor(XX,YY) # the sample correlation ̂ ρ(XX, Y Y )
+```
+
