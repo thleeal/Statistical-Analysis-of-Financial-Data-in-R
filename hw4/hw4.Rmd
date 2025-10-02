@@ -1,0 +1,244 @@
+```{r}
+rm(list = ls())
+setwd("C:/Users/USER/Downloads")  # set directory
+
+library(fGarch) 
+
+# 1(1)
+hibor_23 <- read.table("C:/Users/USER/Downloads/hibor_23.csv",header = T, sep=",")
+attach(hibor_23)
+
+head(hibor_23)
+tail(hibor_23)
+summary(hibor_23)
+
+par(mfrow=c(1,1))
+rate=as.numeric(as.character(hibor_23$rate))
+ts.plot(rate,type = "l",xlab = "index",ylab="rate",main = "HIBOR during Jan 3, 2023 -- Nov 10, 2023")
+acf(rate,main="Autocor of HIBOR during Jan 03, 2023 -- Nov 10, 2023")
+
+# comment
+# From the time series plot of HIBOR in 2023, we can find that the HIBOR rate 
+# has a upwards trend in overall in 2023, though there'e some fluctuations in 
+# the trend. 
+# From the acf graph, we can see that the acf is decaying slowly but not exponentially
+# over time lags so it means that the time series of HIBOR rate is not stationary.
+# The correlation is strong at the beginning and decreasing over time lags and is believed that 
+# it will decrease to value inside the blue dash line, where we could say the 
+# covariance is zero.
+
+# 1(2)
+# training from 2023/1/03 to 2023/06/01
+rate_training <- rate[1:100]
+length(rate_training)
+hibor_23[[1]][1]
+hibor_23[[1]][100]
+
+hibor_23[[1]][101]
+hibor_23[[1]][105]
+# testing from 2023/06/02 to 2023/06/08
+rate_testing <- rate[101:105]
+par(mfrow=c(1,1))
+acf(rate_training,main="Autocor of HIBOR during Jan 03, 2023 -- Jun 01, 2023")
+
+
+# Determine the order of AR fit to HIBOR
+par(mfrow=c(1,2))
+pacf(rate_training,main="PACF of HIBOR", xlim = c(1,16))
+fit_rate <- ar(rate_training)
+ts.plot(fit_rate$aic[1:10],xlab=" ",main="AIC of HIBOR")
+fit_rate$order
+
+# from the pacf, we can see that the pacf of lag-1 differs significantly from 0 
+# and pacf(k>1) are close to 0. So to use a AR(p) model, the order p of the AR
+# model should be 1. From the aic graph, we can see that at 2 we have the lowest
+# aic value so the p = 2-1 = 1 so the order of the AR model should 1.
+
+# Q1(3)
+#Fit AR(1) to HIBOR
+fit_rate  <- arima(rate_training,order = c(1,0,0))
+fit_rate
+
+# the estimated parameters for the Vasicek model
+# Vasicek model: (rt − μ) = (1 − α)(rt−1 − μ) + Wt
+# μ = 3.8620, α = 1-0.9846 = 0.0154, σ = sqrt(0.01816)
+```
+
+```{r}
+# Q1(4)
+# Model Diagnostics
+tsdiag(fit_rate)
+par(mfrow=c(1,1))
+qqnorm(fit_rate$residuals)
+qqline(fit_rate$residuals, col = "red")
+
+# comment
+# From the graph of standardized residuals, we can see that there's one outlier,
+# which may indicate that the standardized residuals don't follow a normal distribution
+# due to heavy tail. Also, there's no obvious patterns in the changes of the residuals.
+# From the graph of ACF of Residuals, we can see that most acf of different time 
+# lags stays inside the blue dash lines which indicates that there is no auto 
+# correlation in the residuals at differnt time points. From the graph of p values
+# for Ljung-Box statistic, we can see that of the points/p values are above the 
+# blue dash line which means that we should retain all null hypothesis which is 
+# that there is no autocorrelation in the residuals.
+
+# From the qq plot, we can see that both tails of the residuals are heavy tails 
+# and thus the residuals don't follow a normal distribution
+
+# Q1(5)
+#Prediction for HIBOR
+n_testing <- length(rate_testing)
+predict_rate <- predict(fit_rate, n_testing)
+ts.plot(predict_rate$pred,lty = 2, ylim = c(3.80,5.09)) 
+lines(seq(length(rate_training) + 1,length(rate_training) + n_testing),rate_testing)
+
+#Prediction interval
+par(mfrow=c(1,1))
+PI_l <- predict_rate$pred - 2*predict_rate$se
+PI_r <- predict_rate$pred + 2*predict_rate$se
+ts.plot(predict_rate$pred,xlab="index",ylab="rate",ylim = c(3.80,5.09),lty = 2,main="Predictions and prediction intervals for the testing period")
+lines(seq(length(rate_training) + 1,length(rate_training) + n_testing),rate_testing)
+lines(PI_l,col = 'red')
+lines(PI_r,col = 'red')
+lines(seq(length(rate_training) + 1,length(rate_training) + n_testing),rep(fit_rate$coef[2],n_testing),col="blue",lty=4)
+legend('topleft',legend = c('predicted','true','long-term mean'),lty = c(2,1,4), cex = 0.8, col = c('black','black','blue'))
+
+# comment
+# as the time series is not stationary, so it is expected to see that the long-term
+# average is not around the center of the prediction intervals as it will be slow 
+# for prediction/variance of prediction to converge to the long-term average/variance 
+# of the series as more samples/observations are needed.
+```
+
+```{r}
+# 2(1)
+# 2.5%-VaR forecast under normal for the next day
+# σt+1^2 = 0.2 + 0.09*1.5^2 + 0.9*0.5 = 2.675
+0.2+0.9*1.5^2+0.9*0.5
+# as sigma at t is known and Wt+1 ~ iid N(0,1), Xt+1 follows a conditional N(0,2.675)
+VaR_normal_cond <- -qnorm(0.025, 0, sqrt(2.675))
+VaR_normal_cond
+
+# 2(2)
+# unconditional variance = ω/ (1 − (α1 + β1))
+0.2/(1-(0.09+0.9))
+VaR_normal_uncond = -qnorm(0.025, 0, sqrt(0.2/(1-(0.09+0.9))))
+VaR_normal_uncond
+
+# 2(3)
+# The VaR obtained in part(1) is much smaller than the VaR obtained in part(2).
+# Comment
+# It means that there is much less risk in the short run by the result of the 
+# conditional VaR which is based on the last month information, Xt and σt^2. While,
+# it indicates that there is high risk in the long run by the result of the 
+# unconditional VaR. Conditional VaR is more useful as it helps us to predict 
+# potential loss of next month while the unconditional VaR is less relevant.
+```
+
+```{r}
+# Q3(1)
+HSI_2023 <- read.table("C:/Users/USER/Downloads/HSI_2023.csv",header = T, sep=",")
+attach(HSI_2023)
+DHSI<-HSI_2023$Close
+DHSILR <- diff(log(DHSI))
+
+par(mfrow=c(2,1))
+ts.plot(DHSI,main="HSI during 2023")
+ts.plot(DHSILR,main="HSI log-returns during 2023")
+
+# comment
+# from the graph of HSI during 2023, the time series has a decreasing trend at the
+# beginning and an upward trend in the middle of the period. From the graph of HSI
+# log-returns during 2023, we don't see any trend there and there are many fluctuations.
+# The time series of the HSI log-returns seems to have a long-term mean with mean 
+# reversion. There's also volatility clustering in the log-returns as we can see 
+# that a high variance of a time point leads to a high variance of it next time point,
+# a low variance of a time point leads to a low variance of its next time point,
+# meaning that the variance is dependent on time.
+
+# Q3(2)
+par(mfrow=c(1,2))
+acf(DHSILR,main="ACF Plot of DSPLR")
+acf((DHSILR)^2,main="ACF Plot of (DSPLR)^2")
+
+# comment
+# The series of the returns is clearly not correlated while the series of 
+# squared returns is clearly correlated and not independent.
+
+# Q3(3)
+par(mfrow=c(1,2))
+pacf((DHSILR)^2,main="PACF Plot of DSPLR^2")
+DHSILR_sq_ar <- ar((DHSILR)^2)
+ts.plot(DHSILR_sq_ar$aic,main="AIC Plot of DSPLR^2")
+DHSILR_sq_ar$order # the order of ARCH = 1 based on both pacf and aic
+
+# Q3(4)
+DHSILR_training =  head(DHSILR,-5) # training
+DHSILR_testing = tail(DHSILR,5) # last 5 days for testing
+
+## fit GARCH
+DHSILR_GARCH <- garchFit( ~ garch(1,1), data = DHSILR_training, trace = FALSE)
+summary(DHSILR_GARCH)
+
+# as the p-value of mu(0.744) is larger than 0.05 and the absolute value of the 
+# t-value of mu is less than 1.96, mu is not significant at 5% level.
+```
+
+```{r}
+# Q3(5)
+DHSILR_GARCH_without_mu <- garchFit( ~ garch(1,1), data = DHSILR_training, trace = FALSE, include.mean = FALSE)
+summary(DHSILR_GARCH_without_mu)
+
+par(mfrow=c(1,2))
+std.res <- (DHSILR_training)/DHSILR_GARCH_without_mu@sigma.t
+acf(std.res)
+qqnorm(std.res)
+abline(0,1,col="red")
+
+# From the standardized residuals tests, by the Jarque-Bera Test result and the 
+# Shapiro-Wilk Test, as the p-value of both 2 tests is smaller than 0.05 and we 
+# reject the null hypothesis, which means that the standardized residuals are 
+# not normally distributed. By the Ljung-Box Test result, as the p-values of the 
+# 6 Ljung-Box Tests are all larger than 0.05, we retain the null hypothesis which
+# means that standardized residuals and the squared residuals are independently 
+# distributed and there is no autocorrelation in both of the residuals and squared 
+# residuals. By the LM Arch Test result, as the p-value is larger than 0.05, retain
+# the null hypothesis, that's the residuals do not exhibit conditional heteroscedasticity.
+
+# From the acf graph of the srd.res series, we can see that there is no autocorrelation
+# in the standardized residuals series. From the qq plot, we can see that the upper and lower
+# tail of the standardised residuals are slightly heavy-tailed.
+
+# Q3(6)
+# Although the standardized residuals are independent, they don't follow normal 
+# distribution so here we have to assume they follow normal distribution so that
+# we have white noise which follows iid N(0,1).
+# Forecasting
+#Volatility forecast for the next day 
+omega <- DHSILR_GARCH_without_mu@fit$coef[1]
+alpha <- DHSILR_GARCH_without_mu@fit$coef[2]
+beta <- DHSILR_GARCH_without_mu@fit$coef[3]
+
+n <- length(DHSILR_training)
+# the one-day-ahead volatility forecast
+volatility_forecast_1 <- omega + alpha*(DHSILR[n])^2 + beta*DHSILR_GARCH@sigma.t[n]^2
+
+# compare with prediction function in terms of sd
+prediction <- predict(DHSILR_GARCH_without_mu, n.ahead = 1)
+sd_forecast <- prediction$standardDeviation
+c(sqrt(volatility_forecast_1), sd_forecast)
+
+# Q3(7)
+# 1%-VaR forecast under normal for the next day
+VaR_normal <- -qnorm(0.01, 0, sd_forecast)
+VaR_normal
+
+# 1%-ES forecast under normal
+N<-100000
+X<-rnorm(N, 0, sd_forecast)
+ES_normal <- mean( - X[- X > VaR_normal])
+ES_normal
+
+c(VaR_normal, ES_normal)
+```
